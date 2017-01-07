@@ -22,8 +22,8 @@ class Trainer(object):
 
     self.summary_ops = {}
 
-    self.model = Model(config, self.data_loader)
     self.data_loader = DataLoader(config, rng=self.rng)
+    self.model = Model(config, self.data_loader)
 
     self._build_session()
 

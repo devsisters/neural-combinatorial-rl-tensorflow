@@ -4,15 +4,19 @@ TensorFlow implementation of [Neural Combinatorial Optimization with Reinforceme
 
 ![model](./assets/model.png)
 
+(in progress)
+
 
 ## Requirements
 
 - Python 2.7
-- [TensorFlow](https://www.tensorflow.org/) 0.12.0
 - [tqdm](https://github.com/tqdm/tqdm)
+- [TensorFlow 0.12.0](https://github.com/tensorflow/tensorflow/tree/r0.12)
 
 
 ## Usage
+
+(in progress)
 
 To train a model:
 

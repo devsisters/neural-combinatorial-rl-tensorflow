@@ -14,16 +14,14 @@ def add_argument_group(name):
 
 # Network
 net_arg = add_argument_group('Network')
-net_arg.add_argument('--hidden_dims', type=int, default=200, help='')
-net_arg.add_argument('--num_layer', type=int, default=2, help='')
+net_arg.add_argument('--hidden_dim', type=int, default=200, help='')
+net_arg.add_argument('--num_layers', type=int, default=2, help='')
+net_arg.add_argument('--max_length', type=int, default=20, help='')
+net_arg.add_argument('--input_dim', type=int, default=2, help='')
 
 # Data
 data_arg = add_argument_group('Data')
-data_arg.add_argument('--data_set', type=str, default='gaze')
-data_arg.add_argument('--data_dir', type=str, default='data')
-data_arg.add_argument('--input_height', type=int, default=35)
-data_arg.add_argument('--input_width', type=int, default=55)
-data_arg.add_argument('--task_name', type=str, default='TPS20')
+data_arg.add_argument('--task', type=str, default='tps20')
 
 # Training / test parameters
 train_arg = add_argument_group('Training')
