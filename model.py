@@ -35,41 +35,41 @@ class Model(object):
     initializer = None
 
     with tf.variable_scope("encoder"):
-      self.inputs = tf.placeholder(
-          tf.float32, [None, self.max_length, self.input_dim], name="inputs")
+      self.enc_inputs = tf.placeholder(
+          tf.float32, [None, self.max_length, self.input_dim], name="enc_inputs")
       self.seq_length = tf.placeholder(
           tf.float32, [None], name="seq_length")
+      batch_size = tf.shape(self.enc_inputs)[0]
 
       self.cell = LSTMCell(self.hidden_dim)
       if self.num_layers > 1:
         cells = [self.cell] * self.num_layers
         self.cell = MultiRNNCell(cells)
 
-      import ipdb; ipdb.set_trace() 
-
-      self.enc_init_state = \
-          get_tiled_state(self.cell, self.inputs, initializer)
-
-      tiled_initial_state = (tiled_init_enc_h, tiled_init_enc_c)
+      self.enc_init_state = trainable_initial_state(batch_size, self.cell.state_size)
       self.encoder_output = tf.nn.dynamic_rnn(
-          self.cell, self.inputs, self.seq_length, tiled_initial_state)
+          self.cell, self.enc_inputs, self.seq_length, self.enc_init_state)
 
     with tf.variable_scope("dencoder"):
-      import ipdb; ipdb.set_trace() 
-      self.first_decoder_input, tiled_decoder_input = \
-          get_tiled_state(self.inputs, self.hidden_dim)
+      self.first_decoder_input = trainable_initial_state(batch_size, self.hidden_dim)
 
-      self.targets = tf.placeholder(tf.float32, name="targets")
+      self.dec_inputs = tf.placeholder(tf.float32,
+          [None, self.max_length, self.input_dim], name="dec_inputs")
+      self.dec_targets = tf.placeholder(tf.float32,
+          [None, self.max_length, self.max_length], name="dec_targets")
       self.is_train = tf.placeholder(tf.bool, name="is_train")
-
-      self.initial_decoder_state, tiled_initial_state = \
-          get_tiled_state(self.inputs, self.hidden_dim)
 
       self.cell = LSTMCell(self.hidden_dim)
       if self.num_layers > 1:
         cells = [self.cell] * self.num_layers
         self.cell = MultiRNNCell(cells)
 
+      self.dec_init_state = trainable_initial_state(batch_size, self.cell.state_size)
+
+      self.decoder_output = tf.nn.dynamic_rnn(
+          self.cell, self.inputs, self.seq_length, tiled_initial_state)
+
+    with tf.variable_scope("dencoder", reuse=True):
       self.decoder_output = tf.nn.dynamic_rnn(
           self.cell, self.inputs, self.seq_length, tiled_initial_state)
 
