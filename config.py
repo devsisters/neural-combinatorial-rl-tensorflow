@@ -16,8 +16,11 @@ def add_argument_group(name):
 net_arg = add_argument_group('Network')
 net_arg.add_argument('--hidden_dim', type=int, default=200, help='')
 net_arg.add_argument('--num_layers', type=int, default=2, help='')
-net_arg.add_argument('--max_length', type=int, default=20, help='')
 net_arg.add_argument('--input_dim', type=int, default=2, help='')
+net_arg.add_argument('--input_max_length', type=int, default=20, help='')
+net_arg.add_argument('--output_max_length', type=int, default=20, help='')
+net_arg.add_argument('--num_glimpse', type=int, default=1, help='')
+net_arg.add_argument('--use_terminal_symbol', type=str2bool, default=False, help='Not implemented yet')
 
 # Data
 data_arg = add_argument_group('Data')
