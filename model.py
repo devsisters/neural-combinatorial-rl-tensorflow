@@ -47,11 +47,14 @@ class Model(object):
         self.cell = MultiRNNCell(cells)
 
       self.enc_init_state = trainable_initial_state(batch_size, self.cell.state_size)
-      self.encoder_output = tf.nn.dynamic_rnn(
+
+      # self.encoder_outputs : [None, max_time, output_size]
+      self.encoder_outputs, self.encoder_final_states = tf.nn.dynamic_rnn(
           self.cell, self.enc_inputs, self.seq_length, self.enc_init_state)
 
     with tf.variable_scope("dencoder"):
-      self.first_decoder_input = trainable_initial_state(batch_size, self.hidden_dim)
+      self.first_decoder_input = \
+          trainable_initial_state(batch_size, self.hidden_dim, name="first_decoder_input")
 
       self.dec_inputs = tf.placeholder(tf.float32,
           [None, self.max_length, self.input_dim], name="dec_inputs")
