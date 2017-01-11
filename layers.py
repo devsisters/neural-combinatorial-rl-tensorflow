@@ -11,13 +11,11 @@ LSTMStateTuple = rnn.LSTMStateTuple
 dynamic_rnn_decoder = seq2seq.dynamic_rnn_decoder
 simple_decoder_fn_train = seq2seq.simple_decoder_fn_train
 
-def decoder_rnn(cell, transformed_dec_inputs,
-                enc_outputs, enc_final_states, dec_init_state,
-                seq_length, hidden_dim, num_glimpse, is_train):
+def decoder_rnn(cell, inputs,
+                enc_outputs, enc_final_states,
+                seq_length, hidden_dim, num_glimpse,
+                max_dec_length, batch_size, is_train):
   with tf.variable_scope("decoder_rnn") as scope:
-    batch_size = tf.shape(transformed_dec_inputs)[0]
-    max_dec_length = transformed_dec_inputs.get_shape()[1]
-
     first_decoder_input = trainable_initial_state(
         batch_size, hidden_dim, name="first_decoder_input")
 
@@ -49,15 +47,26 @@ def decoder_rnn(cell, transformed_dec_inputs,
 
     def decoder_fn_inference(
         time, cell_state, cell_input, cell_output, context_state):
-      pass
+      if cell_output is None:
+        # invariant tha this is time == 0
+        cell_state = enc_final_states
+        cell_input = first_decoder_input
+      else:
+        import ipdb; ipdb.set_trace() 
+        output_logit = output_fn(enc_outputs, cell_output, num_glimpse)
+        cell_output = output_logit
+
+      return (None, cell_state, cell_input, cell_output, context_state)
 
     if is_train:
       decoder_fn = simple_decoder_fn_train(enc_final_states)
+      inputs = tf.concat_v2([inputs, tf.expand_dims(first_decoder_input, 1)], 1)
     else:
       decoder_fn = decoder_fn_inference
+      inputs = tf.expand_dims(first_decoder_input, 1)
 
-    outputs, states = dynamic_rnn_decoder(
-        cell, decoder_fn, inputs=transformed_dec_inputs,
+    outputs, final_state, _ = dynamic_rnn_decoder(
+        cell, decoder_fn, inputs=inputs,
         sequence_length=seq_length, scope=scope)
 
     if is_train:
@@ -69,7 +78,7 @@ def decoder_rnn(cell, transformed_dec_inputs,
         output_logits.append(output_logit)
       outputs = tf.stack(output_logits, 1)
 
-    return outputs, states
+    return outputs, final_state
 
 def trainable_initial_state(batch_size, state_size,
                             initializer=None, name="initial_state"):

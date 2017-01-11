@@ -76,8 +76,8 @@ class Model(object):
       #transformed_dec_inputs = \
       #    tf.nn.conv1d(dec_inputs_without_first, input_weight, 1, "VALID")
 
-      self.deq_seq_length = tf.placeholder(
-          tf.int32, [None], name="deq_seq_length")
+      self.dec_seq_length = tf.placeholder(
+          tf.int32, [None], name="dec_seq_length")
       self.dec_idx_inputs = tf.placeholder(tf.int32,
           [None, self.max_dec_length], name="dec_inputs")
 
@@ -100,18 +100,18 @@ class Model(object):
         cells = [self.dec_cell] * self.num_layers
         self.dec_cell = MultiRNNCell(cells)
 
-      self.dec_init_state = trainable_initial_state(batch_size, self.dec_cell.state_size)
       self.dec_output_logits, self.dec_states = decoder_rnn(
           self.dec_cell, self.transformed_dec_inputs, 
           self.enc_outputs, self.enc_final_states,
-          self.dec_init_state, self.enc_seq_length,
-          self.hidden_dim, self.num_glimpse, is_train=True)
+          self.enc_seq_length, self.hidden_dim, self.num_glimpse,
+          self.max_dec_length, batch_size, is_train=True)
 
     with tf.variable_scope("dencoder", reuse=True):
       self.dec_outputs, _ = decoder_rnn(
-          self.dec_cell, self.dec_inputs, self.enc_outputs,
-          self.enc_final_states, self.dec_init_state, self.dec_seq_length,
-          self.hidden_dim, self.num_glimpse, is_train=False)
+          self.dec_cell, self.transformed_dec_inputs,
+          self.enc_outputs, self.enc_final_states,
+          self.enc_seq_length, self.hidden_dim, self.num_glimpse,
+          self.max_dec_length, batch_size, is_train=False)
 
   def _build_optim(self):
     self.loss = tf.reduce_mean(self.output - self.targets)
