@@ -10,9 +10,10 @@ def prepare_dirs(config):
     config.model_name = "{}_{}".format(config.task, config.load_path)
   else:
     config.model_name = "{}_{}".format(config.task, get_time())
+
   config.model_dir = os.path.join(config.log_dir, config.model_name)
 
-  for path in [config.log_dir]:
+  for path in [config.log_dir, config.data_dir]:
     if not os.path.exists(path):
       os.makedirs(path)
 

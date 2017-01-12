@@ -5,7 +5,7 @@ import tensorflow as tf
 from tensorflow.contrib.framework.python.ops import arg_scope
 
 from model import Model
-from data_loader import DataLoader
+from data_loader import TSPDataLoader
 
 class Trainer(object):
   def __init__(self, config, rng):
@@ -22,7 +22,10 @@ class Trainer(object):
 
     self.summary_ops = {}
 
-    self.data_loader = DataLoader(config, rng=self.rng)
+    if config.task.lower().startswith('tps'):
+      self.data_loader = TSPDataLoader(config, rng=self.rng)
+    else:
+      raise Exception("[!] Unknown task: {}".format(config.task))
     self.model = Model(config, self.data_loader)
 
     self._build_session()
