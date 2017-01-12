@@ -100,14 +100,14 @@ class Model(object):
         cells = [self.dec_cell] * self.num_layers
         self.dec_cell = MultiRNNCell(cells)
 
-      self.dec_output_logits, self.dec_states = decoder_rnn(
+      self.dec_output_logits, self.dec_states, _ = decoder_rnn(
           self.dec_cell, self.transformed_dec_inputs, 
           self.enc_outputs, self.enc_final_states,
           self.enc_seq_length, self.hidden_dim, self.num_glimpse,
           self.max_dec_length, batch_size, is_train=True)
 
     with tf.variable_scope("dencoder", reuse=True):
-      self.dec_outputs, _ = decoder_rnn(
+      self.dec_outputs, _, self.predictions = decoder_rnn(
           self.dec_cell, self.transformed_dec_inputs,
           self.enc_outputs, self.enc_final_states,
           self.enc_seq_length, self.hidden_dim, self.num_glimpse,

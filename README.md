@@ -11,7 +11,7 @@ TensorFlow implementation of [Neural Combinatorial Optimization with Reinforceme
 
 - Python 2.7
 - [tqdm](https://github.com/tqdm/tqdm)
-- [TensorFlow 0.12.0](https://github.com/tensorflow/tensorflow/tree/r0.12)
+- [TensorFlow 0.12.1](https://github.com/tensorflow/tensorflow/tree/r0.12)
 
 
 ## Usage

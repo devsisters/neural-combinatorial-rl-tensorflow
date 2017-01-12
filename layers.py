@@ -14,7 +14,7 @@ simple_decoder_fn_train = seq2seq.simple_decoder_fn_train
 def decoder_rnn(cell, inputs,
                 enc_outputs, enc_final_states,
                 seq_length, hidden_dim, num_glimpse,
-                max_dec_length, batch_size, is_train):
+                max_dec_length, batch_size, is_train, end_of_sequence_id=0):
   with tf.variable_scope("decoder_rnn") as scope:
     first_decoder_input = trainable_initial_state(
         batch_size, hidden_dim, name="first_decoder_input")
@@ -45,18 +45,28 @@ def decoder_rnn(cell, inputs,
         query = glimpse(ref, query, "glimpse_{}".format(idx))
       return attention(ref, query, with_softmax=False)
 
+    maximum_length = tf.convert_to_tensor(max_dec_length, tf.int32)
     def decoder_fn_inference(
         time, cell_state, cell_input, cell_output, context_state):
+      if context_state is None:
+        context_state = tf.TensorArray(tf.float32, size=maximum_length)
+
       if cell_output is None:
         # invariant tha this is time == 0
         cell_state = enc_final_states
         cell_input = first_decoder_input
+        done = tf.zeros([batch_size,], dtype=tf.bool)
       else:
-        import ipdb; ipdb.set_trace() 
         output_logit = output_fn(enc_outputs, cell_output, num_glimpse)
-        cell_output = output_logit
+        sampled_idx = tf.multinomial(output_logit, 1)
 
-      return (None, cell_state, cell_input, cell_output, context_state)
+        context_state.write(time, output_logit)
+        done = tf.squeeze(tf.equal(sampled_idx, end_of_sequence_id), -1)
+
+      done = tf.cond(tf.greater(time, maximum_length),
+          lambda: tf.ones([batch_size,], dtype=tf.bool),
+          lambda: done)
+      return (done, cell_state, cell_input, cell_output, context_state)
 
     if is_train:
       decoder_fn = simple_decoder_fn_train(enc_final_states)
@@ -65,9 +75,9 @@ def decoder_rnn(cell, inputs,
       decoder_fn = decoder_fn_inference
       inputs = tf.expand_dims(first_decoder_input, 1)
 
-    outputs, final_state, _ = dynamic_rnn_decoder(
-        cell, decoder_fn, inputs=inputs,
-        sequence_length=seq_length, scope=scope)
+    outputs, final_state, final_context_state = \
+        dynamic_rnn_decoder(cell, decoder_fn, inputs=inputs,
+                            sequence_length=seq_length, scope=scope)
 
     if is_train:
       output_logits = []
@@ -78,7 +88,7 @@ def decoder_rnn(cell, inputs,
         output_logits.append(output_logit)
       outputs = tf.stack(output_logits, 1)
 
-    return outputs, final_state
+    return outputs, final_state, final_context_state
 
 def trainable_initial_state(batch_size, state_size,
                             initializer=None, name="initial_state"):
@@ -110,43 +120,3 @@ def index_matrix_to_pairs(index_matrix):
       tf.expand_dims(tf.range(tf.shape(index_matrix)[0]), dim=1), 
       [1, tf.shape(index_matrix)[1]])
   return tf.pack([replicated_first_indices, index_matrix], axis=2)
-
-#with tf.name_scope("decoder_fn_inference",
-#    [time, cell_state, cell_input, cell_output, context_state]):
-#  for idx in range(num_glimpse):
-#    query = glimpse(enc_outputs, query)
-#  output = attention(enc_outputs, query)
-#
-#  output_fn = lambda x: linear(x, num_decoder_symbols, scope=varscope)
-#
-#  with ops.name_scope(name, "simple_decoder_fn_inference",
-#                      [time, cell_state, cell_input, cell_output,
-#                      context_state]):
-#    if cell_input is not None:
-#      raise ValueError("Expected cell_input to be None, but saw: %s" %
-#                      cell_input)
-#    if cell_output is None:
-#      # invariant that this is time == 0
-#      next_input_id = tf.ones([batch_size,], dtype=dtype) * (
-#          start_of_sequence_id)
-#      done = tf.zeros([batch_size,], dtype=dtypes.bool)
-#      cell_state = encoder_state
-#      cell_output = tf.zeros([num_decoder_symbols],
-#                                    dtype=dtypes.float32)
-#    else:
-#      cell_output = output_fn(cell_output)
-#      next_input_id = tf.cast(
-#          tf.argmax(cell_output, 1), dtype=dtype)
-#      done = tf.equal(next_input_id, end_of_sequence_id)
-#      
-#    next_input = tf.gather(embeddings, next_input_id)
-#    # if time > maxlen, return all true vector
-#    done = control_flow_ops.cond(tf.greater(time, maximum_length),
-#        lambda: tf.ones([batch_size,], dtype=dtypes.bool),
-#        lambda: done)
-#    return (done, cell_state, next_input, cell_output, context_state)
-#
-#  # next_input = tf.concat_v2([cell_input, output], 1)
-#  next_input = output
-#
-#  return (None, cell_state, next_input, cell_output, context_state)

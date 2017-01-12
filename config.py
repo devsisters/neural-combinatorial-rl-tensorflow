@@ -20,7 +20,7 @@ net_arg.add_argument('--input_dim', type=int, default=2, help='')
 net_arg.add_argument('--max_enc_length', type=int, default=20, help='')
 net_arg.add_argument('--max_dec_length', type=int, default=33, help='')
 net_arg.add_argument('--num_glimpse', type=int, default=1, help='')
-net_arg.add_argument('--use_terminal_symbol', type=str2bool, default=False, help='Not implemented yet')
+net_arg.add_argument('--use_terminal_symbol', type=str2bool, default=True, help='Not implemented yet')
 
 # Data
 data_arg = add_argument_group('Data')
