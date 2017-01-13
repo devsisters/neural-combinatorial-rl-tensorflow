@@ -11,6 +11,9 @@ config = None
 def main(_):
   prepare_dirs(config)
 
+  if not config.task.startswith('tsp'):
+    raise Exception("[!] Task should starts with tsp")
+
   rng = np.random.RandomState(config.random_seed)
   tf.set_random_seed(config.random_seed)
 

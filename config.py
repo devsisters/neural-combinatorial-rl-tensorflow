@@ -14,7 +14,7 @@ def add_argument_group(name):
 
 # Network
 net_arg = add_argument_group('Network')
-net_arg.add_argument('--hidden_dim', type=int, default=200, help='')
+net_arg.add_argument('--hidden_dim', type=int, default=128, help='')
 net_arg.add_argument('--num_layers', type=int, default=2, help='')
 net_arg.add_argument('--input_dim', type=int, default=2, help='')
 net_arg.add_argument('--max_enc_length', type=int, default=20, help='')
@@ -24,7 +24,8 @@ net_arg.add_argument('--use_terminal_symbol', type=str2bool, default=True, help=
 
 # Data
 data_arg = add_argument_group('Data')
-data_arg.add_argument('--task', type=str, default='tps')
+data_arg.add_argument('--task', type=str, default='tsp')
+data_arg.add_argument('--batch_size', type=int, default=128)
 data_arg.add_argument('--min_data_length', type=int, default=5)
 data_arg.add_argument('--max_data_length', type=int, default=10)
 
@@ -35,9 +36,10 @@ train_arg.add_argument('--optimizer', type=str, default='rmsprop', help='')
 train_arg.add_argument('--max_step', type=int, default=10000, help='')
 train_arg.add_argument('--reg_scale', type=float, default=0.5, help='')
 train_arg.add_argument('--batch_size', type=int, default=512, help='')
-train_arg.add_argument('--learning_rate', type=float, default=0.001, help='')
+train_arg.add_argument('--lr_start', type=float, default=0.001, help='')
+train_arg.add_argument('--lr_decay_step', type=int, default=5000, help='')
+train_arg.add_argument('--max_grad_norm', type=float, default=1.0, help='')
 train_arg.add_argument('--checkpoint_secs', type=int, default=300, help='')
-train_arg.add_argument('--max_grad_norm', type=float, default=50, help='')
 
 # Misc
 misc_arg = add_argument_group('Misc')

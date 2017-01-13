@@ -22,13 +22,16 @@ class Model(object):
     self.use_terminal_symbol = config.use_terminal_symbol
 
     self.reg_scale = config.reg_scale
-    self.learning_rate = config.learning_rate
+    self.lr_start = config.lr_start
     self.max_grad_norm = config.max_grad_norm
     self.batch_size = config.batch_size
 
     self.layer_dict = {}
 
-    self._build_model()
+    with arg_scope([linear, LSTMCell], \
+        initializer=tf.random_normal_initializer(0, 0.001)):
+      self._build_model()
+
     self._build_optim()
 
     show_all_variables()
@@ -116,5 +119,14 @@ class Model(object):
   def _build_optim(self):
     self.loss = tf.reduce_mean(self.output - self.targets)
 
-    self.learning_rate = tf.Variable(self.learning_rate)
-    self.optim = tf.train.AdamOptimizer(self.learning_rate)
+    self.lr = tf.Variable(self.lr_start)
+    optimizer = tf.train.AdamOptimizer(self.lr)
+
+    if self.max_grad_norm != None:
+      grads_and_vars = optimizer.compute_gradients(self.loss)
+      for idx, (grad, var) in enumerate(grads_and_vars):
+        if grad is not None:
+          grads_and_vars[idx] = (tf.clip_by_norm(grad, self.max_grad_norm), var)
+      self.optim = optimizer.apply_gradients(grads_and_vars)
+    else:
+      self.optim = optimizer.minimize(self.loss)

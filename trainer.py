@@ -22,7 +22,7 @@ class Trainer(object):
 
     self.summary_ops = {}
 
-    if config.task.lower().startswith('tps'):
+    if config.task.lower().startswith('tsp'):
       self.data_loader = TSPDataLoader(config, rng=self.rng)
     else:
       raise Exception("[!] Unknown task: {}".format(config.task))

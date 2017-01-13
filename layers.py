@@ -7,7 +7,6 @@ from tensorflow.python.util import nest
 linear = layers.linear
 LSTMCell = rnn.LSTMCell
 MultiRNNCell = rnn.MultiRNNCell
-LSTMStateTuple = rnn.LSTMStateTuple
 dynamic_rnn_decoder = seq2seq.dynamic_rnn_decoder
 simple_decoder_fn_train = seq2seq.simple_decoder_fn_train
 
