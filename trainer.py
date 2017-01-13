@@ -41,7 +41,7 @@ class Trainer(object):
                              summary_writer=self.summary_writer,
                              save_summaries_secs=300,
                              save_model_secs=self.checkpoint_secs,
-                             global_step=self.model.discrim_step)
+                             global_step=self.model.global_step)
 
     gpu_options = tf.GPUOptions(
         per_process_gpu_memory_fraction=self.gpu_memory_fraction,

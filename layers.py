@@ -4,7 +4,6 @@ from tensorflow.contrib import layers
 from tensorflow.contrib import seq2seq
 from tensorflow.python.util import nest
 
-linear = layers.linear
 LSTMCell = rnn.LSTMCell
 MultiRNNCell = rnn.MultiRNNCell
 dynamic_rnn_decoder = seq2seq.dynamic_rnn_decoder
@@ -13,16 +12,20 @@ simple_decoder_fn_train = seq2seq.simple_decoder_fn_train
 def decoder_rnn(cell, inputs,
                 enc_outputs, enc_final_states,
                 seq_length, hidden_dim, num_glimpse,
-                max_dec_length, batch_size, is_train, end_of_sequence_id=0):
+                max_dec_length, batch_size, is_train,
+                end_of_sequence_id=0, initializer=None):
   with tf.variable_scope("decoder_rnn") as scope:
     first_decoder_input = trainable_initial_state(
         batch_size, hidden_dim, name="first_decoder_input")
 
     def attention(ref, query, with_softmax=True, scope="attention"):
       with tf.variable_scope(scope):
-        W_ref = tf.get_variable("W_ref", [1, hidden_dim, hidden_dim])
-        W_q = tf.get_variable("W_q", [hidden_dim, hidden_dim])
-        v = tf.get_variable("v", [hidden_dim])
+        W_ref = tf.get_variable(
+            "W_ref", [1, hidden_dim, hidden_dim], initializer=initializer)
+        W_q = tf.get_variable(
+            "W_q", [hidden_dim, hidden_dim], initializer=initializer)
+        v = tf.get_variable(
+            "v", [hidden_dim], initializer=initializer)
 
         encoded_ref = tf.nn.conv1d(ref, W_ref, 1, "VALID")
         encoded_query = tf.matmul(tf.reshape(query, [-1, hidden_dim]), W_q)
@@ -85,7 +88,7 @@ def decoder_rnn(cell, inputs,
         output_logit = output_fn(enc_outputs, output, num_glimpse)
         scope.reuse_variables()
         output_logits.append(output_logit)
-      outputs = tf.stack(output_logits, 1)
+      outputs = tf.stack(output_logits, axis=1)
 
     return outputs, final_state, final_context_state
 
@@ -99,7 +102,6 @@ def trainable_initial_state(batch_size, state_size,
     flat_initializer = tuple(tf.zeros_initializer for initializer in flat_state_size)
 
   names = ["{}_{}".format(name, i) for i in xrange(len(flat_state_size))]
-
   tiled_states = []
 
   for name, size, init in zip(names, flat_state_size, flat_initializer):
@@ -118,4 +120,4 @@ def index_matrix_to_pairs(index_matrix):
   replicated_first_indices = tf.tile(
       tf.expand_dims(tf.range(tf.shape(index_matrix)[0]), dim=1), 
       [1, tf.shape(index_matrix)[1]])
-  return tf.pack([replicated_first_indices, index_matrix], axis=2)
+  return tf.stack([replicated_first_indices, index_matrix], axis=2)

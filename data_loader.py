@@ -1,6 +1,8 @@
 # Most of the codes are from https://github.com/vshallc/PtrNets/blob/master/pointer/misc/tsp.py
 import os
-import np as np
+import itertools
+import numpy as np
+from tqdm import trange
 
 def length(x, y):
   return np.linalg.norm(np.asarray(x) - np.asarray(y))
@@ -24,10 +26,11 @@ def solve_tsp_dynamic(points):
 def generate_one_example(n_nodes):
   nodes = np.random.rand(n_nodes, 2)
   res = solve_tsp_dynamic(nodes)
+  return nodes, res
 
-def generate_examples(num, n_min, n_max):
+def generate_examples(num, n_min, n_max, desc=""):
   examples = []
-  for i in range(num):
+  for i in trange(num, desc=desc):
     n_nodes = np.random.randint(n_min, n_max + 1)
     nodes, res = generate_one_example(n_nodes)
     examples.append((nodes, res))
@@ -45,18 +48,22 @@ class TSPDataLoader(object):
     self.task_name = "{}_{}_{}".format(self.task, self.min_length, self.max_length)
     self.npz_path = os.path.join(config.data_dir, "{}.npz".format(self.task_name))
 
-  def maybe_generate_and_save(self):
+    self._maybe_generate_and_save()
+
+  def _maybe_generate_and_save(self):
     if not os.path.exists(self.npz_path):
       print("[*] Creating dataset for {}".format(self.task))
 
-      train = generate_examples(1048576, self.min_length, self.max_length)
-      valid = generate_examples(1000, self.min_length, self.max_length)
-      test = generate_examples(1000, self.max_length, self.max_length)
+      train = generate_examples(
+          1000000, self.min_length, self.max_length, "Train data..")
+      valid = generate_examples(
+          1000, self.min_length, self.max_length, "Valid data..")
+      test = generate_examples(
+          1000, self.max_length, self.max_length, "Test data..")
 
       np.savez(self.npz_path, train=train, test=test, valid=valid)
     else:
       print("[*] Loading dataset for {}".format(self.task))
-      data = np.load(self.npz_path, train=, test=, val=)
+      data = np.load(self.npz_path)
       self.train, self.test, self.valid = \
           data['train'], data['test'], data['valid']
-
