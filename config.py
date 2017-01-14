@@ -26,10 +26,13 @@ net_arg.add_argument('--use_terminal_symbol', type=str2bool, default=True, help=
 
 # Data
 data_arg = add_argument_group('Data')
-data_arg.add_argument('--task', type=str, default='tsp')
+data_arg.add_argument('--task', type=str, default='TSP')
 data_arg.add_argument('--batch_size', type=int, default=128)
 data_arg.add_argument('--min_data_length', type=int, default=5)
 data_arg.add_argument('--max_data_length', type=int, default=10)
+data_arg.add_argument('--train_num', type=int, default=1000000)
+data_arg.add_argument('--valid_num', type=int, default=1000)
+data_arg.add_argument('--test_num', type=int, default=1000)
 
 # Training / test parameters
 train_arg = add_argument_group('Training')
@@ -45,6 +48,7 @@ train_arg.add_argument('--checkpoint_secs', type=int, default=300, help='')
 # Misc
 misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--log_step', type=int, default=20, help='')
+misc_arg.add_argument('--log_level', type=str, default='INFO', choices=['INFO', 'DEBUG', 'WARN'], help='')
 misc_arg.add_argument('--log_dir', type=str, default='logs')
 misc_arg.add_argument('--data_dir', type=str, default='data')
 misc_arg.add_argument('--output_dir', type=str, default='outputs')

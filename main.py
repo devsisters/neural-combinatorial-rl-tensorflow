@@ -4,15 +4,15 @@ import tensorflow as tf
 
 from trainer import Trainer
 from config import get_config
-from utils import prepare_dirs, save_config
+from utils import prepare_dirs_and_logger, save_config
 
 config = None
 
 def main(_):
-  prepare_dirs(config)
+  prepare_dirs_and_logger(config)
 
-  if not config.task.startswith('tsp'):
-    raise Exception("[!] Task should starts with tsp")
+  if not config.task.lower().startswith('tsp'):
+    raise Exception("[!] Task should starts with TSP")
 
   rng = np.random.RandomState(config.random_seed)
   tf.set_random_seed(config.random_seed)

@@ -52,11 +52,16 @@ class Trainer(object):
     self.sess = sv.prepare_or_wait_for_session(config=sess_config)
 
   def train(self):
-    print("[*] Training starts...")
-    pass
+    tf.logging.info("Training starts...")
+
+    self.data_loader.run_input_queue(self.sess)
+    import ipdb; ipdb.set_trace() 
+    x = 123
+
+    self.data_loader.run_input_queue()
 
   def test(self):
-    pass
+    tf.logging.info("Testing starts...")
 
   def _inject_summary(self, tag, feed_dict, step):
     summaries = self.sess.run(self.summary_ops[tag], feed_dict)

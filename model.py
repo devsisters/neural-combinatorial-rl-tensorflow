@@ -34,12 +34,13 @@ class Model(object):
 
     self.layer_dict = {}
 
+    #self._build_input_ops()
     self._build_model()
     if is_critic:
       self._build_critic_model()
 
-    self._build_optim()
-    self._build_summary()
+    #self._build_optim()
+    #self._build_summary()
 
     show_all_variables()
 
@@ -48,6 +49,15 @@ class Model(object):
 
   def _build_critic_model(self):
     pass
+
+  def _build_input_ops(self):
+    min_queue_examples = values_per_shard * input_queue_capacity_factor
+    capacity = min_queue_examples + 100 * batch_size
+    values_queue = tf.RandomShuffleQueue(
+        capacity=capacity,
+        min_after_dequeue=min_queue_examples,
+        dtypes=[tf.string],
+        name="random_" + value_queue_name)
 
   def _build_model(self):
     self.global_step = tf.Variable(0, trainable=False)
@@ -146,8 +156,19 @@ class Model(object):
           initializer=self.initializer)
 
   def _build_optim(self):
-    self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        logits=self.dec_output_logits, labels=self.dec_targets)
+    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=self.dec_targets, logits=self.dec_output_logits)
+
+    weights = tf.ones(input_length, dtype=tf.int32)
+    batch_loss = tf.div(tf.reduce_sum(tf.multiply(losses, weights)),
+                        tf.reduce_sum(weights),
+                        name="batch_loss")
+
+    tf.losses.add_loss(batch_loss)
+    total_loss = tf.losses.get_total_loss()
+
+    tf.summary.scalar("losses/batch_loss", batch_loss)
+    tf.summary.scalar("losses/total_loss", total_loss)
 
     # TODO: length masking
     #mask = tf.sign(tf.to_float(targets_flat))

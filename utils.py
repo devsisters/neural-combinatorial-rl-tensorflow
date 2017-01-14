@@ -1,11 +1,26 @@
 import os
 import json
+import logging
 import numpy as np
 from datetime import datetime
 
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 
-def prepare_dirs(config):
+def prepare_dirs_and_logger(config):
+  formatter = logging.Formatter(
+      "%(asctime)s:%(levelname)s:%(message)s")
+  logger = logging.getLogger('tensorflow')
+
+  for hdlr in logger.handlers:
+    logger.removeHandler(hdlr)
+
+  handler = logging.StreamHandler()
+  handler.setFormatter(formatter)
+
+  logger.addHandler(handler)
+  logger.setLevel(tf.logging.INFO)
+
   if config.load_path:
     config.model_name = "{}_{}".format(config.task, config.load_path)
   else:
@@ -21,23 +36,14 @@ def get_time():
   return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 def show_all_variables():
-  print("")
-  total_count = 0
-  for idx, op in enumerate(tf.trainable_variables()):
-    shape = op.get_shape()
-    count = np.prod(shape)
-    print("[%2d] %s %s = %s" % (idx, op.name, shape, "{:,}".format(int(count))))
-    total_count += int(count)
-  print("=" * 40)
-  print("[Total] variable size: %s" % "{:,}".format(total_count))
-  print("=" * 40)
-  print("")
+  model_vars = tf.trainable_variables()
+  slim.model_analyzer.analyze_vars(model_vars, print_info=True)
 
 def save_config(model_dir, config):
   param_path = os.path.join(model_dir, "params.json")
 
-  print("[*] MODEL dir: %s" % model_dir)
-  print("[*] PARAM path: %s" % param_path)
+  tf.logging.info("MODEL dir: %s" % model_dir)
+  tf.logging.info("PARAM path: %s" % param_path)
 
   with open(param_path, 'w') as fp:
     json.dump(config.__dict__, fp,  indent=4, sort_keys=True)

@@ -1,8 +1,15 @@
-# Most of the codes are from https://github.com/vshallc/PtrNets/blob/master/pointer/misc/tsp.py
+# Most of the codes are from 
+# https://github.com/vshallc/PtrNets/blob/master/pointer/misc/tsp.py
 import os
 import itertools
+import threading
 import numpy as np
 from tqdm import trange
+from collections import namedtuple
+
+import tensorflow as tf
+
+TSP = namedtuple('TSP', ['x', 'y', 'name'])
 
 def length(x, y):
   return np.linalg.norm(np.asarray(x) - np.asarray(y))
@@ -23,18 +30,10 @@ def solve_tsp_dynamic(points):
   res = min([(A[d][0] + all_distances[0][d[1]], A[d][1]) for d in iter(A)])
   return np.asarray(res[1]) + 1
 
-def generate_one_example(n_nodes):
-  nodes = np.random.rand(n_nodes, 2)
-  res = solve_tsp_dynamic(nodes)
-  return nodes, res
-
-def generate_examples(num, n_min, n_max, desc=""):
-  examples = []
-  for i in trange(num, desc=desc):
-    n_nodes = np.random.randint(n_min, n_max + 1)
-    nodes, res = generate_one_example(n_nodes)
-    examples.append((nodes, res))
-  return examples
+def generate_one_example(n_nodes, rng):
+  nodes = rng.rand(n_nodes, 2).astype(np.float32)
+  solutions = solve_tsp_dynamic(nodes)
+  return nodes, solutions
 
 class TSPDataLoader(object):
   def __init__(self, config, rng=None):
@@ -42,28 +41,105 @@ class TSPDataLoader(object):
     self.rng = rng
 
     self.task = config.task
+    self.batch_size = config.batch_size
     self.min_length = config.min_data_length
     self.max_length = config.max_data_length
 
-    self.task_name = "{}_{}_{}".format(self.task, self.min_length, self.max_length)
-    self.npz_path = os.path.join(config.data_dir, "{}.npz".format(self.task_name))
+    self.data_num = {}
+    self.data_num['train'] = config.train_num
+    self.data_num['valid'] = config.valid_num
+    self.data_num['test'] = config.test_num
+
+    self.data_dir = config.data_dir
+    self.task_name = "{}_({},{})".format(
+        self.task, self.min_length, self.max_length)
+
+    self.data = None
+    self.coord = None
+    self.input_ops, self.target_ops = None, None
+    self.queue_ops, self.enqueue_ops = None, None
 
     self._maybe_generate_and_save()
+    self._create_input_queue()
+
+  def _create_input_queue(self, queue_capacity_factor=16):
+    self.input_ops, self.target_ops = {}, {}
+    self.queue_ops, self.enqueue_ops = {}, {}
+
+    for name in self.data_num.keys():
+      self.input_ops[name] = tf.placeholder(tf.float32, shape=[None, None])
+      self.target_ops[name] = tf.placeholder(tf.int32, shape=[None])
+
+      min_after_dequeue = 5000
+      capacity = min_after_dequeue + 3 * self.batch_size
+
+      if self.is_training:
+        self.queue_ops[name] = tf.RandomShuffleQueue(
+            capacity=capacity,
+            min_after_dequeue=min_after_dequeue,
+            dtypes=[tf.float32, tf.int32],
+            name="random_{}".format(name))
+      else:
+        self.queue_ops[name] = tf.FIFOQueue(
+            capacity=capacity,
+            dtypes=[tf.float32, tf.int32],
+            name="fifo_{}".format(name))
+
+      self.enqueue_ops[name] = \
+          self.queue_ops[name].enqueue([self.input_ops[name], self.target_ops[name]])
+
+    tf.train.queue_runner.add_queue_runner(tf.train.queue_runner.QueueRunner(
+          values_queue, enqueue_ops))
+
+  def run_input_queue(self, sess):
+    threads = []
+    self.coord = tf.train.Coordinator()
+
+    for name in self.data_num.keys():
+      def load_and_enqueue(sess, name, input_ops, enqueue_ops, coord):
+        idx = 0
+        while not coord.should_stop():
+          feed_dict = {
+              input_ops[name]: self.data[name].x[idx],
+              target_ops[name]: self.data[name].y[idx],
+          }
+          sess.run(self.enqueue_ops[name], feed_dict=feed_dict)
+          idx += 1
+
+      args = (sess, name, self.input_ops, self.enqueue_ops, self.coord)
+      t = threading.Thread(target=load_and_enqueue, args=args)
+      t.start()
+      threads.append(t)
+      tf.logging.info("Thread start for [{}]".format(name))
+
+  def stop_input_queue(self):
+    self.coord.request_stop()
+    self.coord.join(threads)
 
   def _maybe_generate_and_save(self):
-    if not os.path.exists(self.npz_path):
-      print("[*] Creating dataset for {}".format(self.task))
+    self.data = {}
 
-      train = generate_examples(
-          1000000, self.min_length, self.max_length, "Train data..")
-      valid = generate_examples(
-          1000, self.min_length, self.max_length, "Valid data..")
-      test = generate_examples(
-          1000, self.max_length, self.max_length, "Test data..")
+    for name, num in self.data_num.items():
+      path = self.get_path(name)
 
-      np.savez(self.npz_path, train=train, test=test, valid=valid)
-    else:
-      print("[*] Loading dataset for {}".format(self.task))
-      data = np.load(self.npz_path)
-      self.train, self.test, self.valid = \
-          data['train'], data['test'], data['valid']
+      if not os.path.exists(path):
+        tf.logging.info("Creating {} for [{}]".format(path, self.task))
+
+        x, y = [], []
+        for i in trange(num, desc="Create {} data".format(name)):
+          n_nodes = self.rng.randint(self.min_length, self.max_length+ 1)
+          nodes, res = generate_one_example(n_nodes, self.rng)
+          x.append(nodes)
+          y.append(res)
+
+        np.savez(path, x=x, y=y)
+        self.data[name] = TSP(x=x, y=y, name=name)
+      else:
+        tf.logging.info("Skip creating {} for [{}]".format(path, self.task))
+        tmp = np.load(path)
+        self.data[name] = TSP(x=tmp['x'], y=tmp['y'], name=name)
+
+  def get_path(self, name):
+    return os.path.join(
+        self.data_dir, "{}_{}={}.npz".format(
+            self.task_name, name, self.data_num[name]))
