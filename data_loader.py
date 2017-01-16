@@ -44,6 +44,7 @@ class TSPDataLoader(object):
     self.batch_size = config.batch_size
     self.min_length = config.min_data_length
     self.max_length = config.max_data_length
+    self.is_train = config.is_train
 
     self.data_num = {}
     self.data_num['train'] = config.train_num
@@ -58,6 +59,7 @@ class TSPDataLoader(object):
     self.coord = None
     self.input_ops, self.target_ops = None, None
     self.queue_ops, self.enqueue_ops = None, None
+    self.x, self.y, self.mask = None, None, None
 
     self._maybe_generate_and_save()
     self._create_input_queue()
@@ -65,38 +67,42 @@ class TSPDataLoader(object):
   def _create_input_queue(self, queue_capacity_factor=16):
     self.input_ops, self.target_ops = {}, {}
     self.queue_ops, self.enqueue_ops = {}, {}
+    self.x, self.y, self.mask = {}, {}, {}
 
     for name in self.data_num.keys():
       self.input_ops[name] = tf.placeholder(tf.float32, shape=[None, None])
       self.target_ops[name] = tf.placeholder(tf.int32, shape=[None])
 
-      min_after_dequeue = 5000
+      min_after_dequeue = 1000
       capacity = min_after_dequeue + 3 * self.batch_size
 
-      if self.is_training:
-        self.queue_ops[name] = tf.RandomShuffleQueue(
-            capacity=capacity,
-            min_after_dequeue=min_after_dequeue,
-            dtypes=[tf.float32, tf.int32],
-            name="random_{}".format(name))
-      else:
-        self.queue_ops[name] = tf.FIFOQueue(
-            capacity=capacity,
-            dtypes=[tf.float32, tf.int32],
-            name="fifo_{}".format(name))
-
+      self.queue_ops[name] = tf.PaddingFIFOQueue(
+          capacity=capacity,
+          dtypes=[tf.float32, tf.int32],
+          shapes=[[None, 2,], [None]],
+          name="fifo_{}".format(name))
       self.enqueue_ops[name] = \
           self.queue_ops[name].enqueue([self.input_ops[name], self.target_ops[name]])
 
-    tf.train.queue_runner.add_queue_runner(tf.train.queue_runner.QueueRunner(
-          values_queue, enqueue_ops))
+      inputs, labels = self.queue_ops[name].dequeue()
+
+      caption_length = tf.shape(inputs)[0]
+      input_length = tf.expand_dims(tf.subtract(caption_length, 1), 0)
+      indicator = tf.ones(input_length, dtype=tf.int32)
+
+      self.x[name], self.y[name], self.mask[name] = tf.train.batch(
+          [inputs, labels, indicator],
+          batch_size=self.batch_size,
+          capacity=capacity,
+          dynamic_pad=True,
+          name="batch_and_pad")
 
   def run_input_queue(self, sess):
     threads = []
     self.coord = tf.train.Coordinator()
 
     for name in self.data_num.keys():
-      def load_and_enqueue(sess, name, input_ops, enqueue_ops, coord):
+      def load_and_enqueue(sess, name, input_ops, target_ops, enqueue_ops, coord):
         idx = 0
         while not coord.should_stop():
           feed_dict = {
@@ -104,9 +110,9 @@ class TSPDataLoader(object):
               target_ops[name]: self.data[name].y[idx],
           }
           sess.run(self.enqueue_ops[name], feed_dict=feed_dict)
-          idx += 1
+          idx = idx+1 if idx+1 <= len(self.data[name].x) - 1 else 0
 
-      args = (sess, name, self.input_ops, self.enqueue_ops, self.coord)
+      args = (sess, name, self.input_ops, self.target_ops, self.enqueue_ops, self.coord)
       t = threading.Thread(target=load_and_enqueue, args=args)
       t.start()
       threads.append(t)

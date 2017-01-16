@@ -55,10 +55,6 @@ class Trainer(object):
     tf.logging.info("Training starts...")
 
     self.data_loader.run_input_queue(self.sess)
-    import ipdb; ipdb.set_trace() 
-    x = 123
-
-    self.data_loader.run_input_queue()
 
   def test(self):
     tf.logging.info("Testing starts...")
