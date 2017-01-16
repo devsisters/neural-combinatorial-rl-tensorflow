@@ -5,7 +5,7 @@ from layers import *
 
 class Model(object):
   def __init__(self, config, 
-               inputs, labels, enc_seq_length, dec_seq_length,
+               inputs, labels, enc_seq_length, dec_seq_length, mask,
                reuse=False, is_critic=False):
     self.task = config.task
     self.debug = config.debug
@@ -42,11 +42,13 @@ class Model(object):
         shape=(), name='is_training'
     )
 
-    self.enc_inputs, self.dec_targets, self.enc_seq_length, self.dec_seq_length = \
+    self.enc_inputs, self.dec_targets, self.enc_seq_length, self.dec_seq_length, self.mask = \
         tf.contrib.layers.utils.smart_cond(
             self.is_training,
-            lambda: (inputs['train'], labels['train'], enc_seq_length['train'], dec_seq_length['train']),
-            lambda: (inputs['test'], labels['test'], enc_seq_length['test'], dec_seq_length['test'])
+            lambda: (inputs['train'], labels['train'], enc_seq_length['train'],
+                     dec_seq_length['train'], mask['train']),
+            lambda: (inputs['test'], labels['test'], enc_seq_length['test'],
+                     dec_seq_length['test'], mask['test'])
         )
 
     if self.use_terminal_symbol:
@@ -102,7 +104,8 @@ class Model(object):
         self.dec_targets = tf.concat_v2([self.dec_targets, tiled_zero_idxs], axis=1)
 
       self.idx_pairs = index_matrix_to_pairs(self.dec_targets)
-      self.embeded_dec_inputs = tf.gather_nd(self.enc_outputs, self.idx_pairs)
+      self.embeded_dec_inputs = tf.stop_gradient(
+          tf.gather_nd(self.enc_outputs, self.idx_pairs))
 
       self.dec_cell = LSTMCell(
           self.hidden_dim,
@@ -135,14 +138,14 @@ class Model(object):
         labels=self.dec_targets, logits=self.dec_output_logits)
 
     def apply_mask(op):
-      length = op[0]
-      lossses = op[1:]
-      return tf.multiply(losses, tf.ones(length, dtype=tf.float32)
+      length = tf.cast(op[:1], tf.int32)
+      loss = op[1:]
+      return tf.multiply(loss, tf.ones(length, dtype=tf.float32))
 
-    import ipdb; ipdb.set_trace() 
-    tf.expand_dims(self.dec_seq_length, 1)
-    self.mask = tf.map_fn(
-        apply_mask, tf.expand_dims(self.dec_seq_length, 1), dtype=tf.float32)
+    #seq_length = tf.expand_dims(tf.cast(self.dec_seq_length, tf.float32), 1)
+    #length_and_loss = tf.concat_v2([seq_length, losses], 1)
+
+    #self.mask = tf.map_fn(apply_mask, length_and_loss, dtype=tf.float32)
     batch_loss = tf.div(tf.reduce_sum(tf.multiply(losses, self.mask)),
                         tf.reduce_sum(self.mask), name="batch_loss")
 

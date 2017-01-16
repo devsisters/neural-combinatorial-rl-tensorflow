@@ -44,7 +44,9 @@ class TSPDataLoader(object):
     self.batch_size = config.batch_size
     self.min_length = config.min_data_length
     self.max_length = config.max_data_length
+
     self.is_train = config.is_train
+    self.use_terminal_symbol = config.use_terminal_symbol
 
     self.data_num = {}
     self.data_num['train'] = config.train_num
@@ -59,7 +61,7 @@ class TSPDataLoader(object):
     self.coord = None
     self.input_ops, self.target_ops = None, None
     self.queue_ops, self.enqueue_ops = None, None
-    self.x, self.y, self.seq_length = None, None, None
+    self.x, self.y, self.seq_length, self.mask = None, None, None, None
 
     self._maybe_generate_and_save()
     self._create_input_queue()
@@ -67,7 +69,7 @@ class TSPDataLoader(object):
   def _create_input_queue(self, queue_capacity_factor=16):
     self.input_ops, self.target_ops = {}, {}
     self.queue_ops, self.enqueue_ops = {}, {}
-    self.x, self.y, self.seq_length = {}, {}, {}
+    self.x, self.y, self.seq_length, self.mask = {}, {}, {}, {}
 
     for name in self.data_num.keys():
       self.input_ops[name] = tf.placeholder(tf.float32, shape=[None, None])
@@ -87,9 +89,14 @@ class TSPDataLoader(object):
       inputs, labels = self.queue_ops[name].dequeue()
 
       seq_length = tf.shape(inputs)[0]
-      self.x[name], self.y[name], self.seq_length[name] = \
+      if self.use_terminal_symbol:
+        mask = tf.ones([seq_length + 1], dtype=tf.float32) # terminal symbol
+      else:
+        mask = tf.ones([seq_length], dtype=tf.float32)
+
+      self.x[name], self.y[name], self.seq_length[name], self.mask[name] = \
           tf.train.batch(
-              [inputs, labels, seq_length],
+              [inputs, labels, seq_length, mask],
               batch_size=self.batch_size,
               capacity=capacity,
               dynamic_pad=True,

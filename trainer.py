@@ -35,9 +35,10 @@ class Trainer(object):
         inputs=self.data_loader.x,
         labels=self.data_loader.y,
         enc_seq_length=self.data_loader.seq_length,
-        dec_seq_length=self.data_loader.seq_length)
+        dec_seq_length=self.data_loader.seq_length,
+        mask=self.data_loader.mask)
 
-    self.build_session()
+    #self.build_session()
     show_all_variables()
 
   def build_session(self):
@@ -65,9 +66,20 @@ class Trainer(object):
     tf.logging.info("Training starts...")
 
     self.data_loader.run_input_queue(self.sess)
-    import ipdb; ipdb.set_trace() 
-    # self.model.transformed_dec_inputs.eval(session=self.sess)
-    x = 123
+
+    #for k in trange(self.max_step, desc="train"):
+    #  self.sess.run(self.model.optim)
+
+    saver = tf.train.Saver(max_to_keep=5)
+
+    tf.contrib.slim.learning.train(
+        train_op,
+        self.model_dir,
+        log_every_n_steps=1,
+        global_step=self.model.global_step,
+        number_of_steps=self.max_step,
+        #init_fn=model.init_fn,
+        saver=saver)
 
   def test(self):
     tf.logging.info("Testing starts...")
