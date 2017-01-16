@@ -51,18 +51,13 @@ class Model(object):
 
     if self.use_terminal_symbol:
       self.dec_seq_length += 1 # terminal symbol
-    self.dec_input_mask = tf.ones(self.dec_seq_length, dtype=tf.int32)
 
     self._build_model()
     if is_critic:
       self._build_critic_model()
 
-    #if not reuse:
-    #  self._build_optim()
-    #  self._build_summary()
-
-  def _build_summary(self):
-    tf.summary.scalar("learning_rate", self.lr)
+    if not reuse:
+      self._build_optim()
 
   def _build_model(self):
     tf.logging.info("Create a model..")
@@ -139,9 +134,17 @@ class Model(object):
     losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=self.dec_targets, logits=self.dec_output_logits)
 
-    mask = self.dec_input_mask
-    batch_loss = tf.div(tf.reduce_sum(tf.multiply(losses, mask)),
-                        tf.reduce_sum(mask), name="batch_loss")
+    def apply_mask(op):
+      length = op[0]
+      lossses = op[1:]
+      return tf.multiply(losses, tf.ones(length, dtype=tf.float32)
+
+    import ipdb; ipdb.set_trace() 
+    tf.expand_dims(self.dec_seq_length, 1)
+    self.mask = tf.map_fn(
+        apply_mask, tf.expand_dims(self.dec_seq_length, 1), dtype=tf.float32)
+    batch_loss = tf.div(tf.reduce_sum(tf.multiply(losses, self.mask)),
+                        tf.reduce_sum(self.mask), name="batch_loss")
 
     tf.losses.add_loss(batch_loss)
     total_loss = tf.losses.get_total_loss()
@@ -149,9 +152,8 @@ class Model(object):
     tf.summary.scalar("losses/batch_loss", batch_loss)
     tf.summary.scalar("losses/total_loss", total_loss)
 
-    # TODO: length masking
-    #mask = tf.sign(tf.to_float(targets_flat))
-    #masked_losses = mask * self.loss
+    self.total_loss = total_loss
+    self.target_cross_entropy_losses = losses
 
     self.lr = tf.train.exponential_decay(
         self.lr_start, self.global_step, self.lr_decay_step,
@@ -160,10 +162,10 @@ class Model(object):
     optimizer = tf.train.AdamOptimizer(self.lr)
 
     if self.max_grad_norm != None:
-      grads_and_vars = optimizer.compute_gradients(self.loss)
+      grads_and_vars = optimizer.compute_gradients(self.total_loss)
       for idx, (grad, var) in enumerate(grads_and_vars):
         if grad is not None:
           grads_and_vars[idx] = (tf.clip_by_norm(grad, self.max_grad_norm), var)
       self.optim = optimizer.apply_gradients(grads_and_vars)
     else:
-      self.optim = optimizer.minimize(self.loss)
+      self.optim = optimizer.minimize(self.total_loss)
