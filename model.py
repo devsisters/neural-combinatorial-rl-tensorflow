@@ -48,7 +48,10 @@ class Model(object):
             lambda: (inputs['train'], labels['train'], enc_seq_length['train'], dec_seq_length['train']),
             lambda: (inputs['test'], labels['test'], enc_seq_length['test'], dec_seq_length['test'])
         )
-    self.dec_input_mask = tf.ones(self.enc_seq_length, dtype=tf.int32)
+
+    if self.use_terminal_symbol:
+      self.dec_seq_length += 1 # terminal symbol
+    self.dec_input_mask = tf.ones(self.dec_seq_length, dtype=tf.int32)
 
     self._build_model()
     if is_critic:
@@ -92,9 +95,10 @@ class Model(object):
 
       if self.use_terminal_symbol:
         # 0 index indicates terminal
-        tiled_zeros = tf.tile(tf.zeros(
-            [1, 1, self.hidden_dim]), [batch_size, 1, 1], name="tiled_zeros")
-        self.enc_outputs = tf.concat_v2([tiled_zeros, self.enc_outputs], axis=1)
+        first_decoder_input = tf.expand_dims(trainable_initial_state(
+            batch_size, self.hidden_dim, name="first_decoder_input"), 1)
+        self.enc_outputs = tf.concat_v2(
+            [first_decoder_input, self.enc_outputs], axis=1)
 
     with tf.variable_scope("dencoder"):
       if self.use_terminal_symbol:
@@ -116,15 +120,15 @@ class Model(object):
       self.dec_output_logits, self.dec_states, _ = decoder_rnn(
           self.dec_cell, self.embeded_dec_inputs, 
           self.enc_outputs, self.enc_final_states,
-          self.enc_seq_length, self.hidden_dim, self.num_glimpse,
+          self.dec_seq_length, self.hidden_dim, self.num_glimpse,
           self.max_dec_length, batch_size, is_train=True,
           initializer=self.initializer)
 
     with tf.variable_scope("dencoder", reuse=True):
       self.dec_outputs, _, self.predictions = decoder_rnn(
-          self.dec_cell, self.embeded_dec_inputs,
+          self.dec_cell, first_decoder_input,
           self.enc_outputs, self.enc_final_states,
-          self.enc_seq_length, self.hidden_dim, self.num_glimpse,
+          self.dec_seq_length, self.hidden_dim, self.num_glimpse,
           self.max_dec_length, batch_size, is_train=False,
           initializer=self.initializer)
 

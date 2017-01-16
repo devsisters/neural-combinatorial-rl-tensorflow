@@ -15,10 +15,7 @@ def decoder_rnn(cell, inputs,
                 max_dec_length, batch_size, is_train,
                 end_of_sequence_id=0, initializer=None):
   with tf.variable_scope("decoder_rnn") as scope:
-    first_decoder_input = trainable_initial_state(
-        batch_size, hidden_dim, name="first_decoder_input")
-
-    def attention(ref, query, with_softmax=True, scope="attention"):
+    def attention(ref, query, with_softmax, scope="attention"):
       with tf.variable_scope(scope):
         W_ref = tf.get_variable(
             "W_ref", [1, hidden_dim, hidden_dim], initializer=initializer)
@@ -39,14 +36,14 @@ def decoder_rnn(cell, inputs,
           return scores
 
     def glimpse(ref, query, scope="glimpse"):
-      p = attention(ref, query, scope=scope)
+      p = attention(ref, query, with_softmax=True, scope=scope)
       alignments = tf.expand_dims(p, 2)
       return tf.reduce_sum(alignments * ref, [1])
 
     def output_fn(ref, query, num_glimpse):
       for idx in range(num_glimpse):
         query = glimpse(ref, query, "glimpse_{}".format(idx))
-      return attention(ref, query, with_softmax=False)
+      return attention(ref, query, with_softmax=False, scope="attention")
 
     maximum_length = tf.convert_to_tensor(max_dec_length, tf.int32)
     def decoder_fn_inference(
@@ -57,7 +54,7 @@ def decoder_rnn(cell, inputs,
       if cell_output is None:
         # invariant tha this is time == 0
         cell_state = enc_final_states
-        cell_input = first_decoder_input
+        cell_input = inputs[:,0,:]
         done = tf.zeros([batch_size,], dtype=tf.bool)
       else:
         output_logit = output_fn(enc_outputs, cell_output, num_glimpse)
@@ -73,11 +70,8 @@ def decoder_rnn(cell, inputs,
 
     if is_train:
       decoder_fn = simple_decoder_fn_train(enc_final_states)
-      # append start symbol for decoder
-      inputs = tf.concat_v2([tf.expand_dims(first_decoder_input, 1), inputs], 1)
     else:
       decoder_fn = decoder_fn_inference
-      inputs = tf.expand_dims(first_decoder_input, 1)
 
     outputs, final_state, final_context_state = \
         dynamic_rnn_decoder(cell, decoder_fn, inputs=inputs,
