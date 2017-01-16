@@ -2,12 +2,11 @@ import tensorflow as tf
 from tensorflow.contrib.framework import arg_scope
 
 from layers import *
-from utils import show_all_variables
 
 class Model(object):
-  def __init__(self, config, data_loader, is_critic=False):
-    self.data_loader = data_loader
-
+  def __init__(self, config, 
+               inputs, labels, enc_seq_length, dec_seq_length,
+               reuse=False, is_critic=False):
     self.task = config.task
     self.debug = config.debug
     self.config = config
@@ -34,15 +33,23 @@ class Model(object):
 
     self.layer_dict = {}
 
-    #self._build_input_ops()
+    ##############
+    # inputs
+    ##############
+
+    self.enc_inputs = inputs
+    self.dec_targets = labels
+    self.enc_seq_length = enc_seq_length
+    self.dec_seq_length = dec_seq_length
+    self.dec_input_mask = tf.ones(self.enc_seq_length, dtype=tf.int32)
+
     self._build_model()
     if is_critic:
       self._build_critic_model()
 
-    #self._build_optim()
-    #self._build_summary()
-
-    show_all_variables()
+    if not reuse:
+      self._build_optim()
+      self._build_summary()
 
   def _build_summary(self):
     tf.summary.scalar("learning_rate", self.lr)
@@ -50,30 +57,16 @@ class Model(object):
   def _build_critic_model(self):
     pass
 
-  def _build_input_ops(self):
-    min_queue_examples = values_per_shard * input_queue_capacity_factor
-    capacity = min_queue_examples + 100 * batch_size
-    values_queue = tf.RandomShuffleQueue(
-        capacity=capacity,
-        min_after_dequeue=min_queue_examples,
-        dtypes=[tf.string],
-        name="random_" + value_queue_name)
-
   def _build_model(self):
     self.global_step = tf.Variable(0, trainable=False)
 
-    input_weight = tf.get_variable(
-        "input_weight", [1, self.input_dim, self.hidden_dim],
+    input_embed = tf.get_variable(
+        "input_embed", [1, self.input_dim, self.hidden_dim],
         initializer=self.initializer)
 
     with tf.variable_scope("encoder"):
-      self.enc_seq_length = tf.placeholder(
-          tf.int32, [None], name="enc_seq_length")
-      self.enc_inputs = tf.placeholder(
-          tf.float32, [None, self.max_enc_length, self.input_dim],
-          name="enc_inputs")
       self.transformed_enc_inputs = tf.nn.conv1d(
-          self.enc_inputs, input_weight, 1, "VALID")
+          self.enc_inputs, input_embed, 1, "VALID")
 
     batch_size = tf.shape(self.enc_inputs)[0]
     with tf.variable_scope("encoder"):
@@ -93,44 +86,22 @@ class Model(object):
           self.enc_seq_length, self.enc_init_state)
 
       if self.use_terminal_symbol:
+        # 0 index indicates terminal
         tiled_zeros = tf.tile(tf.zeros(
-          [1, self.hidden_dim]), [batch_size, 1], name="tiled_zeros")
-        expanded_tiled_zeros = tf.expand_dims(tiled_zeros, axis=1)
-        self.enc_outputs = tf.concat_v2([expanded_tiled_zeros, self.enc_outputs], axis=1)
+            [1, 1, self.hidden_dim]), [batch_size, 1, 1], name="tiled_zeros")
+        self.enc_outputs = tf.concat_v2([tiled_zeros, self.enc_outputs], axis=1)
 
     with tf.variable_scope("dencoder"):
-      #self.first_decoder_input = \
-      #    trainable_initial_state(batch_size, self.hidden_dim, name="first_decoder_input")
+      dec_target_dims = [None, self.max_enc_length]
+      if self.use_terminal_symbol:
+        tiled_zero_idxs = tf.tile(tf.zeros(
+            [1, 1], dtype=tf.int32), [batch_size, 1], name="tiled_zero_idxs")
+        self.dec_targets = tf.concat_v2([self.dec_targets, tiled_zero_idxs], axis=1)
 
-      #self.dec_inputs = tf.placeholder(tf.float32,
-      #    [None, self.max_dec_length, self.input_dim], name="dec_inputs")
-      #transformed_dec_inputs = \
-      #    tf.nn.conv1d(dec_inputs_without_first, input_weight, 1, "VALID")
-
-      self.dec_seq_length = tf.placeholder(
-          tf.int32, [None], name="dec_seq_length")
-      self.dec_idx_inputs = tf.placeholder(tf.int32,
-          [None, self.max_dec_length], name="dec_inputs")
-
-      idx_pairs = index_matrix_to_pairs(self.dec_idx_inputs)
+      idx_pairs = index_matrix_to_pairs(self.dec_targets)
       self.dec_inputs = tf.gather_nd(self.enc_inputs, idx_pairs)
       self.transformed_dec_inputs = \
           tf.gather_nd(self.transformed_enc_inputs, idx_pairs)
-
-      #dec_inputs = [
-      #    tf.expand_dims(self.first_decoder_input, 1),
-      #    dec_inputs_without_first,
-      #]
-      #self.dec_inputs = tf.concat_v2(dec_inputs, axis=1)
-
-      if self.use_terminal_symbol:
-        dec_target_dims = [None, self.max_enc_length + 1]
-      else:
-        dec_target_dims = [None, self.max_enc_length]
-
-      self.dec_targets = tf.placeholder(
-          tf.int32, dec_target_dims, name="dec_targets")
-      self.is_train = tf.placeholder(tf.bool, name="is_train")
 
       self.dec_cell = LSTMCell(
           self.hidden_dim,
@@ -159,10 +130,9 @@ class Model(object):
     losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=self.dec_targets, logits=self.dec_output_logits)
 
-    weights = tf.ones(input_length, dtype=tf.int32)
-    batch_loss = tf.div(tf.reduce_sum(tf.multiply(losses, weights)),
-                        tf.reduce_sum(weights),
-                        name="batch_loss")
+    mask = self.dec_input_mask
+    batch_loss = tf.div(tf.reduce_sum(tf.multiply(losses, mask)),
+                        tf.reduce_sum(mask), name="batch_loss")
 
     tf.losses.add_loss(batch_loss)
     total_loss = tf.losses.get_total_loss()

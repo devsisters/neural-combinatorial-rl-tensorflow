@@ -27,6 +27,8 @@ def main(_):
       raise Exception("[!] You should specify `load_path` to load a pretrained model")
     trainer.test()
 
+  tf.logging.info("Run finished.")
+
 if __name__ == "__main__":
   config, unparsed = get_config()
   tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)

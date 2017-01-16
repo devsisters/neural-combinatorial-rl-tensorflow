@@ -59,7 +59,7 @@ class TSPDataLoader(object):
     self.coord = None
     self.input_ops, self.target_ops = None, None
     self.queue_ops, self.enqueue_ops = None, None
-    self.x, self.y, self.mask = None, None, None
+    self.x, self.y, self.seq_length = None, None, None
 
     self._maybe_generate_and_save()
     self._create_input_queue()
@@ -67,7 +67,7 @@ class TSPDataLoader(object):
   def _create_input_queue(self, queue_capacity_factor=16):
     self.input_ops, self.target_ops = {}, {}
     self.queue_ops, self.enqueue_ops = {}, {}
-    self.x, self.y, self.mask = {}, {}, {}
+    self.x, self.y, self.seq_length = {}, {}, {}
 
     for name in self.data_num.keys():
       self.input_ops[name] = tf.placeholder(tf.float32, shape=[None, None])
@@ -86,16 +86,14 @@ class TSPDataLoader(object):
 
       inputs, labels = self.queue_ops[name].dequeue()
 
-      caption_length = tf.shape(inputs)[0]
-      input_length = tf.expand_dims(tf.subtract(caption_length, 1), 0)
-      indicator = tf.ones(input_length, dtype=tf.int32)
-
-      self.x[name], self.y[name], self.mask[name] = tf.train.batch(
-          [inputs, labels, indicator],
-          batch_size=self.batch_size,
-          capacity=capacity,
-          dynamic_pad=True,
-          name="batch_and_pad")
+      seq_length = tf.shape(inputs)[0]
+      self.x[name], self.y[name], self.seq_length[name] = \
+          tf.train.batch(
+              [inputs, labels, seq_length],
+              batch_size=self.batch_size,
+              capacity=capacity,
+              dynamic_pad=True,
+              name="batch_and_pad")
 
   def run_input_queue(self, sess):
     threads = []

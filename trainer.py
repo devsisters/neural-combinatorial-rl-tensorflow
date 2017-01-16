@@ -5,6 +5,7 @@ import tensorflow as tf
 from tensorflow.contrib.framework.python.ops import arg_scope
 
 from model import Model
+from utils import show_all_variables
 from data_loader import TSPDataLoader
 
 class Trainer(object):
@@ -26,9 +27,27 @@ class Trainer(object):
       self.data_loader = TSPDataLoader(config, rng=self.rng)
     else:
       raise Exception("[!] Unknown task: {}".format(config.task))
-    self.model = Model(config, self.data_loader)
+
+    self.models = {}
+
+    reuse = False
+    for name in ['train', 'valid', 'test']:
+      tf.logging.info("Create a [{}] model..".format(name))
+      vs = tf.get_variable_scope()
+
+      with tf.variable_scope(vs, reuse=reuse):
+        self.models[name] = Model(
+            config,
+            inputs=self.data_loader.x[name],
+            labels=self.data_loader.y[name],
+            enc_seq_length=self.data_loader.seq_length[name],
+            dec_seq_length=self.data_loader.seq_length[name],
+            reuse=reuse)
+      reuse = True
 
     self._build_session()
+
+    show_all_variables()
 
   def _build_session(self):
     self.saver = tf.train.Saver()

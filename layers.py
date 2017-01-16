@@ -117,6 +117,8 @@ def trainable_initial_state(batch_size, state_size,
                                flat_sequence=tiled_states)
 
 def index_matrix_to_pairs(index_matrix):
+  # [[3,1,2], [2,3,1]] -> [[[0, 3], [1, 1], [2, 2]], 
+  #                        [[0, 2], [1, 3], [2, 1]]]
   replicated_first_indices = tf.tile(
       tf.expand_dims(tf.range(tf.shape(index_matrix)[0]), dim=1), 
       [1, tf.shape(index_matrix)[1]])
