@@ -30,26 +30,17 @@ class Trainer(object):
 
     self.models = {}
 
-    reuse = False
-    for name in ['train', 'valid', 'test']:
-      tf.logging.info("Create a [{}] model..".format(name))
-      vs = tf.get_variable_scope()
+    self.model = Model(
+        config,
+        inputs=self.data_loader.x,
+        labels=self.data_loader.y,
+        enc_seq_length=self.data_loader.seq_length,
+        dec_seq_length=self.data_loader.seq_length)
 
-      with tf.variable_scope(vs, reuse=reuse):
-        self.models[name] = Model(
-            config,
-            inputs=self.data_loader.x[name],
-            labels=self.data_loader.y[name],
-            enc_seq_length=self.data_loader.seq_length[name],
-            dec_seq_length=self.data_loader.seq_length[name],
-            reuse=reuse)
-      reuse = True
-
-    self._build_session()
-
+    self.build_session()
     show_all_variables()
 
-  def _build_session(self):
+  def build_session(self):
     self.saver = tf.train.Saver()
     self.summary_writer = tf.summary.FileWriter(self.model_dir)
 
@@ -74,6 +65,9 @@ class Trainer(object):
     tf.logging.info("Training starts...")
 
     self.data_loader.run_input_queue(self.sess)
+    import ipdb; ipdb.set_trace() 
+    # self.model.transformed_dec_inputs.eval(session=self.sess)
+    x = 123
 
   def test(self):
     tf.logging.info("Testing starts...")

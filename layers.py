@@ -27,9 +27,10 @@ def decoder_rnn(cell, inputs,
         v = tf.get_variable(
             "v", [hidden_dim], initializer=initializer)
 
-        encoded_ref = tf.nn.conv1d(ref, W_ref, 1, "VALID")
-        encoded_query = tf.matmul(tf.reshape(query, [-1, hidden_dim]), W_q)
-        encoded_query = tf.reshape(encoded_query, tf.shape(query))
+        encoded_ref = tf.nn.conv1d(ref, W_ref, 1, "VALID", name="encoded_ref")
+        encoded_query = tf.expand_dims(tf.matmul(query, W_q, name="encoded_query"), 1)
+        tiled_encoded_Query = tf.tile(
+            encoded_query, [1, tf.shape(encoded_ref)[1], 1], name="tiled_encoded_query")
         scores = tf.reduce_sum(v * tf.tanh(encoded_ref + encoded_query), [-1])
 
         if with_softmax:
@@ -72,7 +73,8 @@ def decoder_rnn(cell, inputs,
 
     if is_train:
       decoder_fn = simple_decoder_fn_train(enc_final_states)
-      inputs = tf.concat_v2([inputs, tf.expand_dims(first_decoder_input, 1)], 1)
+      # append start symbol for decoder
+      inputs = tf.concat_v2([tf.expand_dims(first_decoder_input, 1), inputs], 1)
     else:
       decoder_fn = decoder_fn_inference
       inputs = tf.expand_dims(first_decoder_input, 1)
@@ -82,13 +84,9 @@ def decoder_rnn(cell, inputs,
                             sequence_length=seq_length, scope=scope)
 
     if is_train:
-      output_logits = []
-      unstacked_outputs = tf.unstack(outputs, max_dec_length, axis=1)
-      for output in unstacked_outputs:
-        output_logit = output_fn(enc_outputs, output, num_glimpse)
-        scope.reuse_variables()
-        output_logits.append(output_logit)
-      outputs = tf.stack(output_logits, axis=1)
+      transposed_outputs = tf.transpose(outputs, [1, 0, 2])
+      fn = lambda x: output_fn(enc_outputs, x, num_glimpse)
+      outputs = tf.transpose(tf.map_fn(fn, transposed_outputs), [1, 0, 2])
 
     return outputs, final_state, final_context_state
 
@@ -123,3 +121,4 @@ def index_matrix_to_pairs(index_matrix):
       tf.expand_dims(tf.range(tf.shape(index_matrix)[0]), dim=1), 
       [1, tf.shape(index_matrix)[1]])
   return tf.stack([replicated_first_indices, index_matrix], axis=2)
+

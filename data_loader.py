@@ -28,7 +28,7 @@ def solve_tsp_dynamic(points):
         B[(S, j)] = min( [(A[(S-{j},k)][0] + all_distances[k][j], A[(S-{j},k)][1] + [j]) for k in S if k != 0 and k!=j])  #this will use 0th index of tuple for ordering, the same as if key=itemgetter(0) used
     A = B
   res = min([(A[d][0] + all_distances[0][d[1]], A[d][1]) for d in iter(A)])
-  return np.asarray(res[1]) + 1
+  return np.asarray(res[1]) + 1 # 0 for padding
 
 def generate_one_example(n_nodes, rng):
   nodes = rng.rand(n_nodes, 2).astype(np.float32)

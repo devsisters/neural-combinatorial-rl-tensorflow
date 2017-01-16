@@ -14,6 +14,11 @@ def main(_):
   if not config.task.lower().startswith('tsp'):
     raise Exception("[!] Task should starts with TSP")
 
+  if config.max_enc_length is None:
+    config.max_enc_length = config.max_data_length
+  if config.max_dec_length is None:
+    config.max_dec_length = config.max_data_length
+
   rng = np.random.RandomState(config.random_seed)
   tf.set_random_seed(config.random_seed)
 

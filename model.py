@@ -37,27 +37,32 @@ class Model(object):
     # inputs
     ##############
 
-    self.enc_inputs = inputs
-    self.dec_targets = labels
-    self.enc_seq_length = enc_seq_length
-    self.dec_seq_length = dec_seq_length
+    self.is_training = tf.placeholder_with_default(
+        tf.constant(False, dtype=tf.bool),
+        shape=(), name='is_training'
+    )
+
+    self.enc_inputs, self.dec_targets, self.enc_seq_length, self.dec_seq_length = \
+        tf.contrib.layers.utils.smart_cond(
+            self.is_training,
+            lambda: (inputs['train'], labels['train'], enc_seq_length['train'], dec_seq_length['train']),
+            lambda: (inputs['test'], labels['test'], enc_seq_length['test'], dec_seq_length['test'])
+        )
     self.dec_input_mask = tf.ones(self.enc_seq_length, dtype=tf.int32)
 
     self._build_model()
     if is_critic:
       self._build_critic_model()
 
-    if not reuse:
-      self._build_optim()
-      self._build_summary()
+    #if not reuse:
+    #  self._build_optim()
+    #  self._build_summary()
 
   def _build_summary(self):
     tf.summary.scalar("learning_rate", self.lr)
 
-  def _build_critic_model(self):
-    pass
-
   def _build_model(self):
+    tf.logging.info("Create a model..")
     self.global_step = tf.Variable(0, trainable=False)
 
     input_embed = tf.get_variable(
@@ -65,7 +70,7 @@ class Model(object):
         initializer=self.initializer)
 
     with tf.variable_scope("encoder"):
-      self.transformed_enc_inputs = tf.nn.conv1d(
+      self.embeded_enc_inputs = tf.nn.conv1d(
           self.enc_inputs, input_embed, 1, "VALID")
 
     batch_size = tf.shape(self.enc_inputs)[0]
@@ -82,7 +87,7 @@ class Model(object):
 
       # self.encoder_outputs : [None, max_time, output_size]
       self.enc_outputs, self.enc_final_states = tf.nn.dynamic_rnn(
-          self.enc_cell, self.transformed_enc_inputs,
+          self.enc_cell, self.embeded_enc_inputs,
           self.enc_seq_length, self.enc_init_state)
 
       if self.use_terminal_symbol:
@@ -92,16 +97,13 @@ class Model(object):
         self.enc_outputs = tf.concat_v2([tiled_zeros, self.enc_outputs], axis=1)
 
     with tf.variable_scope("dencoder"):
-      dec_target_dims = [None, self.max_enc_length]
       if self.use_terminal_symbol:
         tiled_zero_idxs = tf.tile(tf.zeros(
             [1, 1], dtype=tf.int32), [batch_size, 1], name="tiled_zero_idxs")
         self.dec_targets = tf.concat_v2([self.dec_targets, tiled_zero_idxs], axis=1)
 
-      idx_pairs = index_matrix_to_pairs(self.dec_targets)
-      self.dec_inputs = tf.gather_nd(self.enc_inputs, idx_pairs)
-      self.transformed_dec_inputs = \
-          tf.gather_nd(self.transformed_enc_inputs, idx_pairs)
+      self.idx_pairs = index_matrix_to_pairs(self.dec_targets)
+      self.embeded_dec_inputs = tf.gather_nd(self.enc_outputs, self.idx_pairs)
 
       self.dec_cell = LSTMCell(
           self.hidden_dim,
@@ -112,7 +114,7 @@ class Model(object):
         self.dec_cell = MultiRNNCell(cells)
 
       self.dec_output_logits, self.dec_states, _ = decoder_rnn(
-          self.dec_cell, self.transformed_dec_inputs, 
+          self.dec_cell, self.embeded_dec_inputs, 
           self.enc_outputs, self.enc_final_states,
           self.enc_seq_length, self.hidden_dim, self.num_glimpse,
           self.max_dec_length, batch_size, is_train=True,
@@ -120,11 +122,14 @@ class Model(object):
 
     with tf.variable_scope("dencoder", reuse=True):
       self.dec_outputs, _, self.predictions = decoder_rnn(
-          self.dec_cell, self.transformed_dec_inputs,
+          self.dec_cell, self.embeded_dec_inputs,
           self.enc_outputs, self.enc_final_states,
           self.enc_seq_length, self.hidden_dim, self.num_glimpse,
           self.max_dec_length, batch_size, is_train=False,
           initializer=self.initializer)
+
+  def _build_critic_model(self):
+    pass
 
   def _build_optim(self):
     losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
