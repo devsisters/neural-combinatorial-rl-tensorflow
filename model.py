@@ -61,6 +61,8 @@ class Model(object):
     if not reuse:
       self._build_optim()
 
+    self.summary = tf.summary.merge_all()
+
   def _build_model(self):
     tf.logging.info("Create a model..")
     self.global_step = tf.Variable(0, trainable=False)
@@ -122,13 +124,15 @@ class Model(object):
           self.max_dec_length, batch_size, is_train=True,
           initializer=self.initializer)
 
-    with tf.variable_scope("dencoder", reuse=True):
-      self.dec_outputs, _, self.predictions = decoder_rnn(
-          self.dec_cell, first_decoder_input,
-          self.enc_outputs, self.enc_final_states,
-          self.dec_seq_length, self.hidden_dim, self.num_glimpse,
-          self.max_dec_length, batch_size, is_train=False,
-          initializer=self.initializer)
+      self.dec_outputs = tf.argmax(self.dec_output_logits, axis=2, name="dec_outputs")
+
+    #with tf.variable_scope("dencoder", reuse=True):
+    #  self.dec_outputs, _, self.predictions = decoder_rnn(
+    #      self.dec_cell, first_decoder_input,
+    #      self.enc_outputs, self.enc_final_states,
+    #      self.dec_seq_length, self.hidden_dim, self.num_glimpse,
+    #      self.max_dec_length, batch_size, is_train=False,
+    #      initializer=self.initializer)
 
   def _build_critic_model(self):
     pass
@@ -169,6 +173,6 @@ class Model(object):
       for idx, (grad, var) in enumerate(grads_and_vars):
         if grad is not None:
           grads_and_vars[idx] = (tf.clip_by_norm(grad, self.max_grad_norm), var)
-      self.optim = optimizer.apply_gradients(grads_and_vars)
+      self.optim = optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)
     else:
-      self.optim = optimizer.minimize(self.total_loss)
+      self.optim = optimizer.minimize(self.total_loss, global_step=self.global_step)
