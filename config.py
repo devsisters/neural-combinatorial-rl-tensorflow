@@ -14,7 +14,7 @@ def add_argument_group(name):
 
 # Network
 net_arg = add_argument_group('Network')
-net_arg.add_argument('--hidden_dim', type=int, default=128, help='')
+net_arg.add_argument('--hidden_dim', type=int, default=256, help='')
 net_arg.add_argument('--num_layers', type=int, default=1, help='')
 net_arg.add_argument('--input_dim', type=int, default=2, help='')
 net_arg.add_argument('--max_enc_length', type=int, default=None, help='')
@@ -26,7 +26,7 @@ net_arg.add_argument('--use_terminal_symbol', type=str2bool, default=True, help=
 
 # Data
 data_arg = add_argument_group('Data')
-data_arg.add_argument('--task', type=str, default='TSP')
+data_arg.add_argument('--task', type=str, default='tsp')
 data_arg.add_argument('--batch_size', type=int, default=128)
 data_arg.add_argument('--min_data_length', type=int, default=5)
 data_arg.add_argument('--max_data_length', type=int, default=10)
@@ -42,12 +42,13 @@ train_arg.add_argument('--max_step', type=int, default=1000000, help='')
 train_arg.add_argument('--lr_start', type=float, default=0.001, help='')
 train_arg.add_argument('--lr_decay_step', type=int, default=5000, help='')
 train_arg.add_argument('--lr_decay_rate', type=float, default=0.96, help='')
-train_arg.add_argument('--max_grad_norm', type=float, default=1.0, help='')
+train_arg.add_argument('--max_grad_norm', type=float, default=2.0, help='')
 train_arg.add_argument('--checkpoint_secs', type=int, default=300, help='')
 
 # Misc
 misc_arg = add_argument_group('Misc')
-misc_arg.add_argument('--log_step', type=int, default=20, help='')
+misc_arg.add_argument('--log_step', type=int, default=50, help='')
+misc_arg.add_argument('--num_log_samples', type=int, default=3, help='')
 misc_arg.add_argument('--log_level', type=str, default='INFO', choices=['INFO', 'DEBUG', 'WARN'], help='')
 misc_arg.add_argument('--log_dir', type=str, default='logs')
 misc_arg.add_argument('--data_dir', type=str, default='data')

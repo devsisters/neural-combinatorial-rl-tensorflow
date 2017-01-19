@@ -11,9 +11,10 @@ simple_decoder_fn_train = seq2seq.simple_decoder_fn_train
 
 def decoder_rnn(cell, inputs,
                 enc_outputs, enc_final_states,
-                seq_length, hidden_dim, num_glimpse,
-                max_dec_length, batch_size, is_train,
-                end_of_sequence_id=0, initializer=None):
+                seq_length, hidden_dim,
+                num_glimpse, batch_size, is_train,
+                end_of_sequence_id=0, initializer=None,
+                max_length=None):
   with tf.variable_scope("decoder_rnn") as scope:
     def attention(ref, query, with_softmax, scope="attention"):
       with tf.variable_scope(scope):
@@ -41,37 +42,37 @@ def decoder_rnn(cell, inputs,
       return tf.reduce_sum(alignments * ref, [1])
 
     def output_fn(ref, query, num_glimpse):
-      for idx in range(num_glimpse):
-        query = glimpse(ref, query, "glimpse_{}".format(idx))
-      return attention(ref, query, with_softmax=False, scope="attention")
-
-    maximum_length = tf.convert_to_tensor(max_dec_length, tf.int32)
-    def decoder_fn_inference(
-        time, cell_state, cell_input, cell_output, context_state):
-      if context_state is None:
-        context_state = tf.TensorArray(tf.float32, size=maximum_length)
-
-      if cell_output is None:
-        # invariant tha this is time == 0
-        cell_state = enc_final_states
-        cell_input = inputs[:,0,:]
-        done = tf.zeros([batch_size,], dtype=tf.bool)
+      if query is None:
+        return tf.zeros([max_length], tf.float32) # only used for shape inference
       else:
-        output_logit = output_fn(enc_outputs, cell_output, num_glimpse)
-        sampled_idx = tf.multinomial(output_logit, 1)
+        for idx in range(num_glimpse):
+          query = glimpse(ref, query, "glimpse_{}".format(idx))
+        return attention(ref, query, with_softmax=False, scope="attention")
 
-        context_state.write(time, output_logit)
-        done = tf.squeeze(tf.equal(sampled_idx, end_of_sequence_id), -1)
-
-      done = tf.cond(tf.greater(time, maximum_length),
-          lambda: tf.ones([batch_size,], dtype=tf.bool),
-          lambda: done)
-      return (done, cell_state, cell_input, cell_output, context_state)
+    def input_fn(sampled_idx):
+      return tf.stop_gradient(
+          tf.gather_nd(enc_outputs, index_matrix_to_pairs(sampled_idx)))
 
     if is_train:
       decoder_fn = simple_decoder_fn_train(enc_final_states)
     else:
-      decoder_fn = decoder_fn_inference
+      maximum_length = tf.convert_to_tensor(max_length, tf.int32)
+
+      def decoder_fn(time, cell_state, cell_input, cell_output, context_state):
+        cell_output = output_fn(enc_outputs, cell_output, num_glimpse)
+        if cell_state is None:
+          cell_state = enc_final_states
+          next_input = cell_input
+          done = tf.zeros([batch_size,], dtype=tf.bool)
+        else:
+          sampled_idx = tf.cast(tf.argmax(cell_output, 1), tf.int32)
+          next_input = input_fn(sampled_idx)
+          done = tf.equal(sampled_idx, end_of_sequence_id)
+
+        done = tf.cond(tf.greater(time, maximum_length),
+          lambda: tf.ones([batch_size,], dtype=tf.bool),
+          lambda: done)
+        return (done, cell_state, next_input, cell_output, context_state)
 
     outputs, final_state, final_context_state = \
         dynamic_rnn_decoder(cell, decoder_fn, inputs=inputs,
@@ -111,8 +112,10 @@ def trainable_initial_state(batch_size, state_size,
 def index_matrix_to_pairs(index_matrix):
   # [[3,1,2], [2,3,1]] -> [[[0, 3], [1, 1], [2, 2]], 
   #                        [[0, 2], [1, 3], [2, 1]]]
-  replicated_first_indices = tf.tile(
-      tf.expand_dims(tf.range(tf.shape(index_matrix)[0]), dim=1), 
-      [1, tf.shape(index_matrix)[1]])
-  return tf.stack([replicated_first_indices, index_matrix], axis=2)
-
+  replicated_first_indices = tf.range(tf.shape(index_matrix)[0])
+  rank = len(index_matrix.get_shape())
+  if rank == 2:
+    replicated_first_indices = tf.tile(
+        tf.expand_dims(replicated_first_indices, dim=1),
+        [1, tf.shape(index_matrix)[1]])
+  return tf.stack([replicated_first_indices, index_matrix], axis=rank)
